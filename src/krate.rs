@@ -157,7 +157,6 @@ impl<'a> NewCrate<'a> {
         use diesel::update;
 
         self.validate(license_file)?;
-        self.ensure_name_not_reserved(conn)?;
 
         conn.transaction(|| {
             // To avoid race conditions, we try to insert
@@ -236,35 +235,18 @@ impl<'a> NewCrate<'a> {
         Ok(())
     }
 
-    fn ensure_name_not_reserved(&self, conn: &PgConnection) -> CargoResult<()> {
-        use schema::reserved_crate_names::dsl::*;
-        use diesel::select;
-        use diesel::expression::dsl::exists;
-
-        let reserved_name = select(exists(
-            reserved_crate_names.filter(canon_crate_name(name).eq(
-                canon_crate_name(
-                    self.name,
-                ),
-            )),
-        )).get_result::<bool>(conn)?;
-        if reserved_name {
-            Err(human("cannot upload a crate with a reserved name"))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn save_new_crate(&self, conn: &PgConnection, user_id: i32) -> QueryResult<Option<Crate>> {
+    fn save_new_crate(&self, conn: &PgConnection, user_id: i32) -> CargoResult<Option<Crate>> {
         use schema::crates::dsl::*;
         use diesel::insert;
+        use std::error::Error;
 
         conn.transaction(|| {
             let maybe_inserted = insert(&self.on_conflict_do_nothing())
                 .into(crates)
                 .returning(ALL_COLUMNS)
                 .get_result::<Crate>(conn)
-                .optional()?;
+                .optional()
+                .map_err(|e| human(e.description()))?;
 
             if let Some(ref krate) = maybe_inserted {
                 let owner = CrateOwner {

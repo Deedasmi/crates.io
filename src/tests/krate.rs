@@ -554,7 +554,7 @@ fn new_krate_with_reserved_name() {
         ::sign_in(&mut req, &app);
         let json = bad_resp!(middle.call(&mut req));
         assert!(json.errors[0].detail.contains(
-            "cannot upload a crate with a reserved name",
+            "cannot upload crate with reserved name",
         ));
     }
 
